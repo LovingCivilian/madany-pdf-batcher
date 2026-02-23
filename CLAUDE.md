@@ -65,6 +65,10 @@ Output goes to `dist/MadanyPDFBatcher/`. The spec file has exclusions for unused
 - **Stamp caching:** `PreparedStamp` pre-processes images once, caches by opacity.
 - **PyInstaller-compatible:** All asset paths go through `resolve_path()`.
 
+## Writing Style
+
+Never use em dashes (—) anywhere: not in code, comments, commit messages, or any generated text. Use a normal hyphen (-) or colon (:) instead.
+
 ## Git Commits
 
 Do NOT include `Co-Authored-By` lines in commit messages. All commits should be attributed solely to the repository owner.
