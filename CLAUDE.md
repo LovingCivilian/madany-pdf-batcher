@@ -65,6 +65,10 @@ Output goes to `dist/MadanyPDFBatcher/`. The spec file has exclusions for unused
 - **Stamp caching:** `PreparedStamp` pre-processes images once, caches by opacity.
 - **PyInstaller-compatible:** All asset paths go through `resolve_path()`.
 
+## Git Commits
+
+Do NOT include `Co-Authored-By` lines in commit messages. All commits should be attributed solely to the repository owner.
+
 ## Configuration
 
 - `config.ini` — App-level settings (e.g., `default_preset` under `[General]`).
