@@ -1,4 +1,4 @@
-# Madany's PDF Batcher v1.1.2
+# Madany's PDF Batcher v1.1.3
 
 A desktop application for batch processing PDFs, built with PySide6 and PyMuPDF.
 
