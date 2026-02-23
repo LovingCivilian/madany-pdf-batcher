@@ -19,6 +19,7 @@ A desktop application for batch processing PDFs. Add text, timestamps, image sta
 - **Per-Paper-Size Configs** - Separate settings for A3, A4, Letter, and more in portrait and landscape
 - **9-Position Placement** - Place content at any corner, edge, or center with millimeter margin offsets
 - **Substitution Variables** - Use `$Filename`, `$Date`, and other placeholders that resolve per-file
+- **File Search & Stats** - Search/filter the PDF tree by filename with a live checked/total file count
 - **Dark / Light Theme** - Toggle themes with immediate preview updates
 
 ## Installation
