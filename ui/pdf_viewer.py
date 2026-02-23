@@ -82,12 +82,9 @@ def render_current_page(win: MainWindow) -> None:
     try:
         page = win.current_doc.load_page(win.current_page_index)
 
-        # Dynamic render zoom: higher resolution when zoomed in for sharpness
-        render_zoom = PREVIEW_ZOOM_BASE * max(1.0, win._user_zoom)
-
         # If features are toggled off, render the raw page only
         if not win._show_features:
-            win.preview_widget.set_page(page, zoom=render_zoom)
+            win.preview_widget.set_page(page, zoom=PREVIEW_ZOOM_BASE)
             from ui.navigation import update_page_info
             update_page_info(win)
             return
@@ -140,10 +137,10 @@ def render_current_page(win: MainWindow) -> None:
                 cfg = get_config_for_page_size(win, temp_page, "stamp")
                 _apply_stamp_to_page(win, temp_page, cfg)
 
-            win.preview_widget.set_page(temp_page, zoom=render_zoom)
+            win.preview_widget.set_page(temp_page, zoom=PREVIEW_ZOOM_BASE)
             doc_copy.close()
         else:
-            win.preview_widget.set_page(page, zoom=render_zoom)
+            win.preview_widget.set_page(page, zoom=PREVIEW_ZOOM_BASE)
 
         from ui.navigation import update_page_info
         update_page_info(win)

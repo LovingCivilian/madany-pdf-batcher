@@ -9,19 +9,22 @@ Provides a consistent preview rendering with:
 - Zoom support via viewport-based sizing
 """
 
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional
 
-from PySide6.QtCore import Qt, QEvent, QSize
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QPen, QPalette
-from PySide6.QtWidgets import QLabel, QSizePolicy, QFrame, QScrollArea
+from PySide6.QtCore import Qt, QEvent, QSize, QRect
+from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QPen, QPalette, QPaintEvent, QWheelEvent
+from PySide6.QtWidgets import QWidget, QSizePolicy, QScrollArea
 
 import fitz
 
 
-class PDFPreviewWidget(QLabel):
+class PDFPreviewWidget(QWidget):
     """
-    A QLabel-based widget for rendering PDF page previews with
+    A widget for rendering PDF page previews with
     consistent styling (gray background, shadow, margins).
+
+    Uses paintEvent for efficient rendering — Qt only paints the
+    visible region, which keeps zoom at any level responsive.
     """
 
     # --- Style Constants ---
@@ -44,26 +47,32 @@ class PDFPreviewWidget(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # --- FIX: Initialize attributes FIRST ---
-        # This prevents crashes if setBackgroundRole triggers an early changeEvent
+        # --- Initialize attributes FIRST ---
         self._current_image: Optional[QImage] = None
+        self._source_pixmap: Optional[QPixmap] = None
         self._overlay_config: Optional[Dict] = None
         self._overlay_scale: float = 1.0
         self._user_zoom: float = 1.0
         self._viewport_size: Optional[QSize] = None
+        self._scrollbar_margin: int = 0  # set by PreviewScrollArea
+        self._rendering: bool = False
 
-        self.setAlignment(Qt.AlignCenter)
+        # Cached display state (computed in _prepare_display, used in paintEvent)
+        self._paper_rect: Optional[QRect] = None   # dest rect for the page on the canvas
+        self._display_scale: float = 1.0
+        self._bg_color: QColor = QColor(self.BG_LIGHT)
+
         self.setAutoFillBackground(True)
         self.setBackgroundRole(QPalette.Base)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.setMinimumSize(100, 100)
-        self.setFrameStyle(QFrame.StyledPanel)
 
     def clear_preview(self) -> None:
         """Clear the preview display and show disabled state."""
         self._current_image = None
+        self._source_pixmap = None
         self._overlay_config = None
-        self.setMinimumSize(0, 0)
+        self._paper_rect = None
         self._render()
 
     def set_image(self, image: QImage, overlay_config: Optional[Dict] = None, scale: float = 1.0) -> None:
@@ -77,6 +86,7 @@ class PDFPreviewWidget(QLabel):
                    If image is 1:1 with PDF points (72 DPI), scale should be 1.0.
         """
         self._current_image = image
+        self._source_pixmap = QPixmap.fromImage(image)
         self._overlay_config = overlay_config
         self._overlay_scale = scale
         self._render()
@@ -121,11 +131,25 @@ class PDFPreviewWidget(QLabel):
 
     def _is_dark_mode(self) -> bool:
         """Heuristic to detect if the application is in dark mode."""
-        # If the Window background is dark (< 128 lightness), assume dark mode.
         return self.palette().color(QPalette.Window).lightness() < 128
 
     def _render(self) -> None:
-        """Render the current image (or disabled state) with styling."""
+        """Prepare display state and schedule a repaint."""
+        # Guard against re-entrant calls (resize -> viewport change -> _render loop)
+        if self._rendering:
+            return
+        self._rendering = True
+        try:
+            self._prepare_display()
+        finally:
+            self._rendering = False
+
+    def _prepare_display(self) -> None:
+        """Compute layout geometry, resize widget, schedule repaint.
+
+        No pixmap scaling here — paintEvent draws the source pixmap
+        directly into a dest rect, so QPainter only processes visible pixels.
+        """
         # Use viewport size as the base if available, otherwise own size
         if self._viewport_size is not None:
             base_w = self._viewport_size.width()
@@ -137,93 +161,85 @@ class PDFPreviewWidget(QLabel):
         if base_w <= 0 or base_h <= 0:
             return
 
-        # Determine Theme Colors
         is_dark = self._is_dark_mode()
 
-        if self._current_image is None:
-            # --- Disabled State Rendering ---
-            bg_color = QColor(self.DISABLED_BG_DARK if is_dark else self.DISABLED_BG_LIGHT)
-
-            canvas_w = base_w
-            canvas_h = base_h
-            self.setMinimumSize(0, 0)
-
-            final_image = QImage(canvas_w, canvas_h, QImage.Format_RGB888)
-            final_image.fill(bg_color)
-
-            self.setPixmap(QPixmap.fromImage(final_image))
+        if self._current_image is None or self._source_pixmap is None:
+            # --- Disabled State ---
+            self._bg_color = QColor(self.DISABLED_BG_DARK if is_dark else self.DISABLED_BG_LIGHT)
+            self._paper_rect = None
+            self.resize(base_w, base_h)
+            self.update()
             return
 
-        # --- Active State Rendering ---
-        bg_color = QColor(self.BG_DARK if is_dark else self.BG_LIGHT)
+        # --- Active State ---
+        self._bg_color = QColor(self.BG_DARK if is_dark else self.BG_LIGHT)
 
-        # Calculate available space with padding (based on viewport)
         available_width = base_w - 2 * self.PADDING
         available_height = base_h - 2 * self.PADDING
 
         if available_width <= 0 or available_height <= 0:
             return
 
-        # Scale the image to fit the viewport
-        img_width = self._current_image.width()
-        img_height = self._current_image.height()
+        img_width = self._source_pixmap.width()
+        img_height = self._source_pixmap.height()
 
-        # 'fit_scale' converts Image Pixels -> Screen Pixels (at 100% zoom)
+        # fit_scale: Source Pixels -> Screen Pixels at 100% zoom
         fit_scale = min(available_width / img_width, available_height / img_height)
 
-        # Apply user zoom on top of fit
-        display_scale = fit_scale * self._user_zoom
-        scaled_width = int(img_width * display_scale)
-        scaled_height = int(img_height * display_scale)
+        # Apply user zoom
+        self._display_scale = fit_scale * self._user_zoom
+        scaled_width = int(img_width * self._display_scale)
+        scaled_height = int(img_height * self._display_scale)
 
-        # Canvas is the larger of viewport or scaled page + padding
-        canvas_w = max(base_w, scaled_width + 2 * self.PADDING)
-        canvas_h = max(base_h, scaled_height + 2 * self.PADDING)
+        # Canvas = max of viewport or page+padding.
+        # Snap to viewport when overflow is smaller than the scrollbar
+        # margin — this prevents the oscillation where a scrollbar
+        # appearing/disappearing changes the viewport by that exact amount.
+        content_w = scaled_width + 2 * self.PADDING
+        content_h = scaled_height + 2 * self.PADDING
+        sb = self._scrollbar_margin
+        canvas_w = base_w if content_w <= base_w + sb else content_w
+        canvas_h = base_h if content_h <= base_h + sb else content_h
 
-        # Drive scrollbar sizing
-        if self._user_zoom > 1.0:
-            self.setMinimumSize(canvas_w, canvas_h)
-        else:
-            self.setMinimumSize(0, 0)
+        # Center the page on the canvas
+        paper_x = (canvas_w - scaled_width) // 2
+        paper_y = (canvas_h - scaled_height) // 2
+        self._paper_rect = QRect(paper_x, paper_y, scaled_width, scaled_height)
 
-        scaled_pixmap = QPixmap.fromImage(self._current_image).scaled(
-            scaled_width, scaled_height,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        )
+        # Resize widget — drives scroll area scrollbars
+        self.resize(canvas_w, canvas_h)
+        self.update()
 
-        # Create final image with background
-        final_image = QImage(canvas_w, canvas_h, QImage.Format_RGB888)
-        final_image.fill(bg_color)
-
-        painter = QPainter(final_image)
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Paint only the visible region — efficient at any zoom level."""
+        painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        exposed = event.rect()
 
-        # Center the page
-        paper_x = (canvas_w - scaled_pixmap.width()) // 2
-        paper_y = (canvas_h - scaled_pixmap.height()) // 2
+        # Fill only the exposed area with background
+        painter.fillRect(exposed, self._bg_color)
 
-        # Draw the page
-        painter.drawPixmap(paper_x, paper_y, scaled_pixmap)
+        if self._paper_rect is not None and self._source_pixmap is not None:
+            # Draw source pixmap scaled into dest rect.
+            # QPainter only processes pixels within the exposed/clipped region,
+            # so this is fast regardless of zoom level.
+            painter.drawPixmap(self._paper_rect, self._source_pixmap)
 
-        # Draw overlay guides if configured
-        if self._overlay_config is not None:
-            # FIX: Multiply display_scale by _overlay_scale (render zoom) to get ratio: Screen Pixels / PDF Points
-            effective_scale = display_scale * self._overlay_scale
-
-            self._draw_overlay_guides(
-                painter, paper_x, paper_y,
-                scaled_pixmap.width(), scaled_pixmap.height(),
-                self._overlay_config, effective_scale
-            )
+            # Draw overlay guides
+            if self._overlay_config is not None:
+                effective_scale = self._display_scale * self._overlay_scale
+                self._draw_overlay_guides(
+                    painter,
+                    self._paper_rect.x(), self._paper_rect.y(),
+                    self._paper_rect.width(), self._paper_rect.height(),
+                    self._overlay_config, effective_scale
+                )
 
         painter.end()
-        self.setPixmap(QPixmap.fromImage(final_image))
 
     def _draw_overlay_guides(self, painter: QPainter, x: int, y: int,
                               w: int, h: int, config: Dict, scale: float) -> None:
         """Draw margin guide lines on the preview."""
-        # Save painter state and set clipping to paper bounds
         painter.save()
         painter.setClipRect(x, y, w, h)
 
@@ -235,32 +251,24 @@ class PDFPreviewWidget(QLabel):
         h_margin_mm = config.get("h_margin", 10.0)
         v_margin_mm = config.get("v_margin", 10.0)
 
-        # 1 mm = 2.83465 points
         pts_per_mm = 72 / 25.4
 
         mx_px = int(h_margin_mm * pts_per_mm * scale)
         my_px = int(v_margin_mm * pts_per_mm * scale)
 
         pos_str = config.get("position", "Top Left")
-
-        # Extend lines beyond clip region to ensure they reach edges visually
         extend = 5
 
-        # Vertical Lines (Left / Right)
-        # Removed 'mx_px < w' check to match old behavior strictly,
-        # though clipping handles it anyway.
         if pos_str.endswith("Left"):
             painter.drawLine(x + mx_px, y - extend, x + mx_px, y + h + extend)
         elif pos_str.endswith("Right"):
             painter.drawLine(x + w - mx_px, y - extend, x + w - mx_px, y + h + extend)
 
-        # Horizontal Lines (Top / Bottom)
         if pos_str.startswith("Top"):
             painter.drawLine(x - extend, y + my_px, x + w + extend, y + my_px)
         elif pos_str.startswith("Bottom"):
             painter.drawLine(x - extend, y + h - my_px, x + w + extend, y + h - my_px)
 
-        # Restore painter state
         painter.restore()
 
     def resizeEvent(self, event) -> None:
@@ -271,12 +279,43 @@ class PDFPreviewWidget(QLabel):
 
 
 class PreviewScrollArea(QScrollArea):
-    """A scroll area that forwards its viewport size to the preview widget."""
+    """A scroll area that forwards its viewport size to the preview widget.
+
+    Reports the actual viewport size and provides the scrollbar margin to the
+    child widget so it can snap canvas sizes that barely overflow, preventing
+    oscillation when scrollbars toggle on/off.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._zoom_callback = None
+
+    def set_zoom_callback(self, callback):
+        """Set a callback(delta, mouse_pos) for Ctrl+Scroll zoom.
+
+        delta: +1 (zoom in) or -1 (zoom out)
+        mouse_pos: QPoint position of cursor relative to viewport
+        """
+        self._zoom_callback = callback
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if event.modifiers() & Qt.ControlModifier and self._zoom_callback:
+            delta = 1 if event.angleDelta().y() > 0 else -1
+            mouse_vp = event.position().toPoint()
+            self._zoom_callback(delta, mouse_vp)
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         widget = self.widget()
         if widget is not None and hasattr(widget, 'set_viewport_size'):
+            sb = max(
+                self.verticalScrollBar().sizeHint().width(),
+                self.horizontalScrollBar().sizeHint().height(),
+            )
+            widget._scrollbar_margin = sb
             widget.set_viewport_size(self.viewport().size())
 
 
