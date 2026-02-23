@@ -7,7 +7,7 @@ from typing import Dict, TYPE_CHECKING
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLineEdit,
     QPushButton, QTreeWidget, QTreeWidgetItem, QHeaderView,
-    QFileDialog, QApplication, QMenu, QFileIconProvider,
+    QFileDialog, QApplication, QMenu, QFileIconProvider, QLabel,
 )
 from PySide6.QtCore import Qt, QFileInfo
 
@@ -33,6 +33,11 @@ def setup_files_tab(win: MainWindow) -> None:
 
     tree_group = QGroupBox("Found PDFs")
     tree_layout = QVBoxLayout(tree_group)
+    win.tree_search_input = QLineEdit()
+    win.tree_search_input.setPlaceholderText("Search files...")
+    win.tree_search_input.setClearButtonEnabled(True)
+    win.tree_search_input.textChanged.connect(lambda text: _filter_tree(win, text))
+    tree_layout.addWidget(win.tree_search_input)
     win.pdf_tree = QTreeWidget()
     win.pdf_tree.setHeaderHidden(False)
     win.pdf_tree.setHeaderLabels(["Name", "Size"])
@@ -51,6 +56,8 @@ def setup_files_tab(win: MainWindow) -> None:
     )
     win.pdf_tree.setAnimated(True)
     tree_layout.addWidget(win.pdf_tree)
+    win.tree_stats_label = QLabel("Checked: 0 / Total: 0")
+    tree_layout.addWidget(win.tree_stats_label)
     layout.addWidget(tree_group, 1)
 
     output_group = QGroupBox("Output Folder")
@@ -199,6 +206,8 @@ def populate_pdf_tree(win: MainWindow, folder_path: str) -> None:
 
     _prune_empty_folders(root_item)
     win.pdf_tree.expandAll()
+    win.tree_search_input.clear()
+    update_tree_stats(win)
 
     _show_scan_summary(win, was_canceled, stats, folder_path)
 
@@ -312,7 +321,12 @@ def show_tree_context_menu(win: MainWindow, position) -> None:
 
     menu.addSeparator()
 
-    reverse_action = QAction("Reverse Checked", win)
+    reverse_selected_action = QAction("Reverse Selected", win)
+    reverse_selected_action.triggered.connect(lambda: _reverse_selected(win))
+    reverse_selected_action.setEnabled(has_selection)
+    menu.addAction(reverse_selected_action)
+
+    reverse_action = QAction("Reverse All", win)
     reverse_action.triggered.connect(lambda: _reverse_selection(win))
     reverse_action.setEnabled(has_items)
     menu.addAction(reverse_action)
@@ -344,6 +358,25 @@ def _batch_set_check_state(win: MainWindow, state) -> None:
             if item.flags() & Qt.ItemIsUserCheckable:
                 if item.checkState(0) != state:
                     item.setCheckState(0, state)
+    finally:
+        win._suppress_list_update = False
+    refresh_selected_files_list(win)
+
+
+def _reverse_selected(win: MainWindow) -> None:
+    """Toggle check state for all highlighted (selected) tree items."""
+    items = win.pdf_tree.selectedItems()
+    if not items:
+        return
+    win._suppress_list_update = True
+    try:
+        for item in items:
+            if item.flags() & Qt.ItemIsUserCheckable:
+                current = item.checkState(0)
+                if current == Qt.Checked:
+                    item.setCheckState(0, Qt.Unchecked)
+                else:
+                    item.setCheckState(0, Qt.Checked)
     finally:
         win._suppress_list_update = False
     refresh_selected_files_list(win)
@@ -410,6 +443,7 @@ def refresh_selected_files_list(win: MainWindow) -> None:
     old_index = win.current_file_index
 
     win.selected_pdf_paths = new_list
+    update_tree_stats(win)
 
     if not win.selected_pdf_paths:
         win.current_file_index = -1
@@ -424,9 +458,59 @@ def refresh_selected_files_list(win: MainWindow) -> None:
             win.update_navigation_ui()
             return
 
-    nearest_index = max(0, min(old_index, len(win.selected_pdf_paths) - 1))
-    win.current_file_index = nearest_index
-    win.open_pdf_at_index(win.current_file_index)
+    # Previously viewed file was unchecked — close preview instead of auto-jumping
+    win.current_file_index = -1
+    win.close_current_doc()
+    win.update_navigation_ui()
+
+
+def _filter_tree(win: MainWindow, text: str) -> None:
+    """Filter tree items by filename, keeping parent folders of matches visible."""
+    search = text.strip().lower()
+
+    def filter_item(item: QTreeWidgetItem) -> bool:
+        """Return True if item (or any descendant) matches the search."""
+        full_path = getattr(item, "full_path", "")
+        is_pdf = full_path.lower().endswith(".pdf")
+
+        if is_pdf:
+            visible = not search or search in item.text(0).lower()
+            item.setHidden(not visible)
+            return visible
+
+        # Folder: recurse children, show folder if any child is visible
+        any_child_visible = False
+        for i in range(item.childCount()):
+            if filter_item(item.child(i)):
+                any_child_visible = True
+        item.setHidden(not any_child_visible)
+        return any_child_visible
+
+    for i in range(win.pdf_tree.topLevelItemCount()):
+        top = win.pdf_tree.topLevelItem(i)
+        filter_item(top)
+        top.setHidden(False)  # Always keep root visible
+
+
+def update_tree_stats(win: MainWindow) -> None:
+    """Update the stats label with checked/total PDF counts."""
+    total = 0
+    checked = 0
+
+    def count(item: QTreeWidgetItem):
+        nonlocal total, checked
+        full_path = getattr(item, "full_path", "")
+        if full_path.lower().endswith(".pdf"):
+            total += 1
+            if item.checkState(0) == Qt.Checked:
+                checked += 1
+        for i in range(item.childCount()):
+            count(item.child(i))
+
+    for i in range(win.pdf_tree.topLevelItemCount()):
+        count(win.pdf_tree.topLevelItem(i))
+
+    win.tree_stats_label.setText(f"Checked: {checked} / Total: {total}")
 
 
 def format_size(size_bytes: int) -> str:

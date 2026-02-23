@@ -35,6 +35,15 @@ def close_current_doc(win: MainWindow) -> None:
     win.active_features_label.setText("Active Features")
     win.active_features_label.setEnabled(False)
 
+    if win._current_bold_item:
+        try:
+            font = win._current_bold_item.font(0)
+            font.setBold(False)
+            win._current_bold_item.setFont(0, font)
+        except RuntimeError:
+            pass
+        win._current_bold_item = None
+
 
 def open_pdf_at_index(win: MainWindow, index: int) -> None:
     """Open a PDF from the selected list by index."""
