@@ -8,7 +8,7 @@ from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
 import fitz
 
 from core.constants import (
-    PTS_PER_MM, DEFAULT_PAPER_KEY, PREVIEW_ZOOM, detect_paper_key,
+    PTS_PER_MM, DEFAULT_PAPER_KEY, PREVIEW_ZOOM_BASE, detect_paper_key,
 )
 from core.anchor import compute_anchor_for_pdf
 from core.pdf_operations import PreparedStamp
@@ -82,6 +82,16 @@ def render_current_page(win: MainWindow) -> None:
     try:
         page = win.current_doc.load_page(win.current_page_index)
 
+        # Dynamic render zoom: higher resolution when zoomed in for sharpness
+        render_zoom = PREVIEW_ZOOM_BASE * max(1.0, win._user_zoom)
+
+        # If features are toggled off, render the raw page only
+        if not win._show_features:
+            win.preview_widget.set_page(page, zoom=render_zoom)
+            from ui.navigation import update_page_info
+            update_page_info(win)
+            return
+
         text_enabled = win.group_text_insertion.isChecked()
         final_text_content = ""
         if text_enabled:
@@ -130,10 +140,10 @@ def render_current_page(win: MainWindow) -> None:
                 cfg = get_config_for_page_size(win, temp_page, "stamp")
                 _apply_stamp_to_page(win, temp_page, cfg)
 
-            win.preview_widget.set_page(temp_page, zoom=PREVIEW_ZOOM)
+            win.preview_widget.set_page(temp_page, zoom=render_zoom)
             doc_copy.close()
         else:
-            win.preview_widget.set_page(page, zoom=PREVIEW_ZOOM)
+            win.preview_widget.set_page(page, zoom=render_zoom)
 
         from ui.navigation import update_page_info
         update_page_info(win)

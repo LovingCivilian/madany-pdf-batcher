@@ -95,6 +95,11 @@ def update_navigation_ui(win: MainWindow) -> None:
 
     win.page_input.blockSignals(False)
 
+    win.btn_zoom_in.setEnabled(has_doc)
+    win.btn_zoom_out.setEnabled(has_doc)
+    win.btn_zoom_fit.setEnabled(has_doc)
+    win.btn_toggle_overlay.setEnabled(has_doc)
+
     update_page_info(win)
 
 
