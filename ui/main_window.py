@@ -21,6 +21,7 @@ from core.constants import (
 )
 from core.pdf_operations import PDFOperations
 from core.substitution_engine import SubstitutionEngine
+from core.substitution_loader import load_substitution_definitions
 from core.preset_manager import PresetManager
 from core.utils import resolve_path
 from core.themes import get_light_palette, get_dark_palette
@@ -80,7 +81,8 @@ class MainWindow(QMainWindow):
         self._suppress_list_update: bool = False
 
         self.pdf_ops = PDFOperations()
-        self.substitution_engine = SubstitutionEngine()
+        self._substitution_definitions = load_substitution_definitions()
+        self.substitution_engine = SubstitutionEngine(definitions=self._substitution_definitions)
         self.preset_manager = PresetManager()
         self.font_families: Dict[str, Dict[str, str]] = get_font_families()
         self._is_dark_theme: bool = False
@@ -278,6 +280,17 @@ class MainWindow(QMainWindow):
 
     def manage_presets(self) -> None:
         _manage_presets(self)
+
+    def manage_substitutions(self) -> None:
+        from dialogs.substitution_dialog import ManageSubstitutionsDialog
+
+        dlg = ManageSubstitutionsDialog(self._substitution_definitions, parent=self)
+        dlg.exec()
+        if dlg.was_saved():
+            self._substitution_definitions = dlg.get_definitions()
+            self.substitution_engine.update_definitions(self._substitution_definitions)
+            self.btn_substitution_picker.update_definitions(self._substitution_definitions)
+            self.render_current_page()
 
     # =================================================================
     # Zoom / Toggle

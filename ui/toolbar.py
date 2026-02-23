@@ -33,6 +33,11 @@ def setup_toolbar(win: MainWindow) -> None:
     win.action_manage_presets.triggered.connect(lambda: win.manage_presets())
     toolbar.addAction(win.action_manage_presets)
 
+    win.action_manage_substitutions = QAction("Manage Substitutions", win)
+    win.action_manage_substitutions.setStatusTip("Manage substitution definitions")
+    win.action_manage_substitutions.triggered.connect(lambda: win.manage_substitutions())
+    toolbar.addAction(win.action_manage_substitutions)
+
     toolbar.addSeparator()
 
     win.action_documentation = QAction("Documentation", win)

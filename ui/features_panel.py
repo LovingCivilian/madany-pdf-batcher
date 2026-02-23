@@ -53,7 +53,9 @@ def setup_features_tab(win: MainWindow) -> None:
     win.text_input_box.setFixedHeight(TEXT_INPUT_HEIGHT)
     win.text_input_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     win.text_input_box.setPlaceholderText("Enter text to insert...")
-    win.btn_substitution_picker = SubstitutionPickerButton(win.text_input_box)
+    win.btn_substitution_picker = SubstitutionPickerButton(
+        win.text_input_box, definitions=win._substitution_definitions
+    )
     text_input_layout.addWidget(win.text_input_box)
     text_input_layout.addWidget(win.btn_substitution_picker)
     text_group_layout.addWidget(text_input_group)

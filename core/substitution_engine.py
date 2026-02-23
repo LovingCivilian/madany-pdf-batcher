@@ -3,20 +3,25 @@ import os
 import re
 from typing import Any
 
-# Assumes constants.py is located at core/constants.py based on original import
-from core.constants import SUBSTITUTION_DEFINITIONS
+from core.substitution_loader import load_substitution_definitions
 
 class SubstitutionEngine:
     """
     Fully modular substitution system.
-    
+
     Responsibilities:
     1. Extracts named regex groups (metadata) from filenames.
     2. Applies variable substitution to text content using extracted metadata.
     """
 
-    def __init__(self) -> None:
-        self.definitions = SUBSTITUTION_DEFINITIONS
+    def __init__(self, definitions: list[dict] | None = None) -> None:
+        if definitions is None:
+            definitions = load_substitution_definitions()
+        self.definitions = definitions
+
+    def update_definitions(self, definitions: list[dict]) -> None:
+        """Replace definitions at runtime (e.g. after dialog save)."""
+        self.definitions = definitions
 
     # -----------------------------
     # Extract values from filename
@@ -40,7 +45,7 @@ class SubstitutionEngine:
         for definition in self.definitions:
             pattern = definition["regex"]
             match = re.search(pattern, base_name, flags=re.IGNORECASE)
-            
+
             if match:
                 # Store all non-empty named groups
                 for key, value in match.groupdict().items():
@@ -71,21 +76,21 @@ class SubstitutionEngine:
         def filter_lines(raw_text: str) -> str:
             lines = raw_text.split('\n')
             kept_lines = []
-            
+
             for line in lines:
                 stripped = line.strip()
                 # Check if line is exactly a placeholder variable
                 match = re.fullmatch(r'\$(\w+)', stripped)
-                
+
                 if match:
                     key = match.group(1)
                     # If key is missing, drop the entire line
                     if key not in extracted_data:
                         missing_keys[key] = True
                         continue
-                
+
                 kept_lines.append(line)
-            
+
             return '\n'.join(kept_lines)
 
         # -------------------------------------------------
@@ -95,7 +100,7 @@ class SubstitutionEngine:
             key = match.group(1)
             if key in extracted_data:
                 return extracted_data[key]
-            
+
             # Record missing key and return empty string
             missing_keys[key] = True
             return ""

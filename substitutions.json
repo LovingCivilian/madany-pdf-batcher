@@ -1,0 +1,37 @@
+[
+  {
+    "name": "PartNumber",
+    "description": "7-digit Part Identifier",
+    "regex": "(?<!\\d)(?P<PartNumber>\\d{7})(?=[-\\s]|$)"
+  },
+  {
+    "name": "Version",
+    "description": "4-Digit Part Version",
+    "regex": "(?<=-)\\s*(?P<Version>\\d{4})(?=[-\\s]|$)"
+  },
+  {
+    "name": "DocType",
+    "description": "3-Digit Document Type",
+    "regex": "(?<=-)\\s*(?P<DocType>\\d{3})(?=[-\\s]|$)"
+  },
+  {
+    "name": "TabNumber",
+    "description": "2-Digit Tab Number",
+    "regex": "(?<=-)\\s*(?P<TabNumber>\\d{2})(?=\\s|$)"
+  },
+  {
+    "name": "Revision",
+    "description": "2-Character Document Revision",
+    "regex": "REV\\s+(?P<Revision>[A-Z]{2})(?=\\s|$)"
+  },
+  {
+    "name": "Title",
+    "description": "Full Part Name",
+    "regex": "REV\\s+[A-Z]{2}\\s+(?P<Title>.+)$"
+  },
+  {
+    "name": "DocNumber",
+    "description": "Full Document Number",
+    "regex": "(?P<DocNumber>\\d{7}[-\\d]*\\s+REV\\s+[A-Z]{2})"
+  }
+]
