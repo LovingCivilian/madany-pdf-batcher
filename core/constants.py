@@ -7,6 +7,39 @@ from core.utils import resolve_path
 DEBOUNCE_DELAY_MS = 150
 
 # ============================================================
+# APPLICATION CONSTANTS
+# ============================================================
+
+APP_TITLE = "Madany's PDF Batcher 1.1.2"
+WINDOW_WIDTH = 1500
+WINDOW_HEIGHT = 900
+PROGRESS_DIALOG_WIDTH = 400
+PROGRESS_DIALOG_HEIGHT = 130
+LEFT_PANEL_MIN_WIDTH = 300
+RIGHT_PANEL_MIN_WIDTH = 400
+SPLITTER_INITIAL_SIZES = [1000, 400]
+NAV_SPINBOX_WIDTH = 65
+PAGE_INFO_LABEL_WIDTH = 250
+TEXT_INPUT_HEIGHT = 80
+PASSWORD_TOGGLE_WIDTH = 45
+TREE_SIZE_COLUMN_WIDTH = 60
+FILENAME_TRUNCATE_LENGTH = 50
+THREAD_SLEEP_PER_FILE = 0.01
+THREAD_SLEEP_PER_PAGE = 0.001
+PTS_PER_MM = 72.0 / 25.4
+DEFAULT_PAPER_KEY = ("A4", "portrait")
+OVERWRITE_DIALOG_MIN_WIDTH = 500
+OVERWRITE_DIALOG_MIN_HEIGHT = 300
+MAX_ERRORS_DISPLAYED = 5
+TIMESTAMP_UPDATE_INTERVAL_MS = 1000
+STAMP_IMAGE_FILTERS = "Image Files (*.png *.jpg *.jpeg *.bmp);;All Files (*.*)"
+PREVIEW_ZOOM = 1.5
+CANCEL_BTN_WIDTH = 100
+STATUS_LABEL_MIN_HEIGHT = 35
+
+PDF_SAVE_OPTIONS = {"garbage": 0, "deflate": True, "clean": True}
+
+# ============================================================
 # PAPER DEFINITIONS
 # ============================================================
 
