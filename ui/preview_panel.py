@@ -10,8 +10,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 
-from core.constants import NAV_SPINBOX_WIDTH, PAGE_INFO_LABEL_WIDTH
-from widgets.preview_widget import PDFPreviewWidget
+from core.constants import (
+    NAV_SPINBOX_WIDTH, PAGE_INFO_LABEL_WIDTH,
+    ZOOM_BTN_WIDTH, ZOOM_LABEL_WIDTH, ZOOM_FIT_BTN_WIDTH, TOGGLE_BTN_WIDTH,
+)
+from widgets.preview_widget import PDFPreviewWidget, PreviewScrollArea
 
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
@@ -48,9 +51,46 @@ def setup_preview_tab(win: MainWindow) -> None:
 
     layout.addWidget(file_controls)
 
-    # --- Preview widget ---
+    # --- Zoom/Toggle controls bar ---
+    zoom_controls = QWidget()
+    zoom_layout = QHBoxLayout(zoom_controls)
+    zoom_layout.setContentsMargins(0, 0, 0, 0)
+
+    win.btn_toggle_overlay = QPushButton("Original")
+    win.btn_toggle_overlay.setCheckable(True)
+    win.btn_toggle_overlay.setFixedWidth(TOGGLE_BTN_WIDTH)
+
+    win.btn_zoom_out = QPushButton("-")
+    win.btn_zoom_out.setFixedWidth(ZOOM_BTN_WIDTH)
+
+    win.zoom_label = QLabel("100%")
+    win.zoom_label.setAlignment(Qt.AlignCenter)
+    win.zoom_label.setFixedWidth(ZOOM_LABEL_WIDTH)
+
+    win.btn_zoom_in = QPushButton("+")
+    win.btn_zoom_in.setFixedWidth(ZOOM_BTN_WIDTH)
+
+    win.btn_zoom_fit = QPushButton("Fit")
+    win.btn_zoom_fit.setFixedWidth(ZOOM_FIT_BTN_WIDTH)
+
+    zoom_layout.addWidget(win.btn_toggle_overlay)
+    zoom_layout.addStretch(1)
+    zoom_layout.addWidget(win.btn_zoom_out)
+    zoom_layout.addWidget(win.zoom_label)
+    zoom_layout.addWidget(win.btn_zoom_in)
+    zoom_layout.addWidget(win.btn_zoom_fit)
+
+    layout.addWidget(zoom_controls)
+
+    # --- Preview widget in scroll area ---
     win.preview_widget = PDFPreviewWidget()
-    layout.addWidget(win.preview_widget, stretch=1)
+    win.preview_scroll = PreviewScrollArea()
+    win.preview_scroll.setWidgetResizable(False)
+    win.preview_scroll.setAlignment(Qt.AlignCenter)
+    win.preview_scroll.setFrameShape(QFrame.NoFrame)
+    win.preview_scroll.setWidget(win.preview_widget)
+
+    layout.addWidget(win.preview_scroll, stretch=1)
 
     # --- Page navigation controls ---
     page_controls = QWidget()

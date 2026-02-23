@@ -17,6 +17,7 @@ from core.constants import (
     TIMESTAMP_FORMATS, TIMESTAMP_UPDATE_INTERVAL_MS, DEBOUNCE_DELAY_MS,
     DEFAULT_TEXT_CONFIG, DEFAULT_TIMESTAMP_CONFIG, DEFAULT_STAMP_CONFIG,
     ALL_PAPER_KEYS, get_font_families,
+    PREVIEW_ZOOM_MIN, PREVIEW_ZOOM_MAX, PREVIEW_ZOOM_STEP, PREVIEW_ZOOM_DEFAULT,
 )
 from core.pdf_operations import PDFOperations
 from core.substitution_engine import SubstitutionEngine
@@ -83,6 +84,9 @@ class MainWindow(QMainWindow):
         self.preset_manager = PresetManager()
         self.font_families: Dict[str, Dict[str, str]] = get_font_families()
         self._is_dark_theme: bool = False
+
+        self._user_zoom: float = PREVIEW_ZOOM_DEFAULT
+        self._show_features: bool = True
 
         self._worker_thread = None
         self._progress_dialog = None
@@ -215,6 +219,11 @@ class MainWindow(QMainWindow):
         self.btn_next_page.clicked.connect(lambda: goto_next_page(self))
         self.page_input.valueChanged.connect(lambda v: on_page_input_changed(self, v))
 
+        self.btn_zoom_in.clicked.connect(self._zoom_in)
+        self.btn_zoom_out.clicked.connect(self._zoom_out)
+        self.btn_zoom_fit.clicked.connect(self._zoom_fit)
+        self.btn_toggle_overlay.clicked.connect(self._toggle_overlay)
+
         self.btn_browse_input.clicked.connect(lambda: pick_input_folder(self))
         self.btn_browse_output.clicked.connect(lambda: pick_output_folder(self))
         self.pdf_tree.itemChanged.connect(lambda item, col: on_tree_item_changed(self, item, col))
@@ -268,6 +277,32 @@ class MainWindow(QMainWindow):
 
     def manage_presets(self) -> None:
         _manage_presets(self)
+
+    # =================================================================
+    # Zoom / Toggle
+    # =================================================================
+    def _zoom_in(self) -> None:
+        self._user_zoom = min(self._user_zoom + PREVIEW_ZOOM_STEP, PREVIEW_ZOOM_MAX)
+        self._apply_zoom()
+
+    def _zoom_out(self) -> None:
+        self._user_zoom = max(self._user_zoom - PREVIEW_ZOOM_STEP, PREVIEW_ZOOM_MIN)
+        self._apply_zoom()
+
+    def _zoom_fit(self) -> None:
+        self._user_zoom = PREVIEW_ZOOM_DEFAULT
+        self._apply_zoom()
+
+    def _apply_zoom(self) -> None:
+        pct = int(round(self._user_zoom * 100))
+        self.zoom_label.setText(f"{pct}%")
+        self.preview_widget.set_user_zoom(self._user_zoom, render=False)
+        self.render_current_page()
+
+    def _toggle_overlay(self) -> None:
+        self._show_features = not self._show_features
+        self.btn_toggle_overlay.setText("Features" if not self._show_features else "Original")
+        self.render_current_page()
 
     def toggle_theme(self) -> None:
         app = QApplication.instance()
