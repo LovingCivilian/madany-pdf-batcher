@@ -73,6 +73,16 @@ Never use em dashes (—) anywhere: not in code, comments, commit messages, or a
 
 Do NOT include `Co-Authored-By` lines in commit messages. All commits should be attributed solely to the repository owner.
 
+## Releasing
+
+1. Complete all work and commit as you go
+2. Bump the version in `core/constants.py` (`APP_TITLE`) and `CLAUDE.md`, commit and push
+3. Build: `pyinstaller MadanyPDFBatcher.spec -y`
+4. Zip: create `MadanyPDFBatcher-vX.Y.Z-windows.zip` from `dist/MadanyPDFBatcher/`
+5. Create the release with `gh release create vX.Y.Z` - attach the zip and write release notes
+6. Always include a Full Changelog link at the bottom of the notes:
+   `https://github.com/LovingCivilian/madany-pdf-batcher/compare/vOLD...vNEW`
+
 ## Configuration
 
 - `config.ini` — App-level settings (e.g., `default_preset` under `[General]`).
