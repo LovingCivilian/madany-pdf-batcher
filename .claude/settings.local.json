@@ -3,7 +3,9 @@
     "allow": [
       "WebFetch(domain:pymupdf.readthedocs.io)",
       "Bash(ls:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(cd \"C:/Users/LovingCivilian/Documents/Python Projects/v12 fixing image stamp speed\" && python -c \"from ui import MainWindow; print\\('Import OK'\\)\" 2>&1)",
+      "Bash(export PATH=\"/c/Program Files/GitHub CLI:$PATH\" && gh auth status 2>&1)"
     ]
   }
 }
