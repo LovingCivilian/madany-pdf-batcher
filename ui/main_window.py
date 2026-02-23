@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         self.btn_zoom_out.clicked.connect(self._zoom_out)
         self.btn_zoom_fit.clicked.connect(self._zoom_fit)
         self.btn_toggle_overlay.clicked.connect(self._toggle_overlay)
+        self.preview_scroll.set_zoom_callback(self._on_scroll_zoom)
 
         self.btn_browse_input.clicked.connect(lambda: pick_input_folder(self))
         self.btn_browse_output.clicked.connect(lambda: pick_output_folder(self))
@@ -293,11 +294,35 @@ class MainWindow(QMainWindow):
         self._user_zoom = PREVIEW_ZOOM_DEFAULT
         self._apply_zoom()
 
+    def _on_scroll_zoom(self, delta: int, mouse_pos) -> None:
+        old_zoom = self._user_zoom
+        if delta > 0:
+            self._user_zoom = min(self._user_zoom + PREVIEW_ZOOM_STEP, PREVIEW_ZOOM_MAX)
+        else:
+            self._user_zoom = max(self._user_zoom - PREVIEW_ZOOM_STEP, PREVIEW_ZOOM_MIN)
+        if self._user_zoom == old_zoom:
+            return
+
+        # Anchor point: document coordinate under the mouse before zoom
+        sa = self.preview_scroll
+        hbar = sa.horizontalScrollBar()
+        vbar = sa.verticalScrollBar()
+        doc_x = hbar.value() + mouse_pos.x()
+        doc_y = vbar.value() + mouse_pos.y()
+
+        ratio = self._user_zoom / old_zoom
+
+        self._apply_zoom()
+
+        # After zoom the widget resized — adjust scrollbars so the same
+        # document point stays under the mouse cursor.
+        hbar.setValue(int(doc_x * ratio) - mouse_pos.x())
+        vbar.setValue(int(doc_y * ratio) - mouse_pos.y())
+
     def _apply_zoom(self) -> None:
         pct = int(round(self._user_zoom * 100))
         self.zoom_label.setText(f"{pct}%")
-        self.preview_widget.set_user_zoom(self._user_zoom, render=False)
-        self.render_current_page()
+        self.preview_widget.set_user_zoom(self._user_zoom, render=True)
 
     def _toggle_overlay(self) -> None:
         self._show_features = not self._show_features

@@ -88,6 +88,8 @@ def setup_preview_tab(win: MainWindow) -> None:
     win.preview_scroll.setWidgetResizable(False)
     win.preview_scroll.setAlignment(Qt.AlignCenter)
     win.preview_scroll.setFrameShape(QFrame.NoFrame)
+    win.preview_scroll.setStyleSheet("QScrollArea { background: transparent; }")
+    win.preview_scroll.viewport().setAutoFillBackground(False)
     win.preview_scroll.setWidget(win.preview_widget)
 
     layout.addWidget(win.preview_scroll, stretch=1)
