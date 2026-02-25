@@ -89,7 +89,11 @@ def pick_input_folder(win: MainWindow) -> None:
 
 
 def _auto_open_first_pdf(win: MainWindow) -> None:
-    """Check the first available PDF in the tree and open it for preview."""
+    """Check the first available PDF in the tree.
+
+    refresh_selected_files_list handles opening the preview automatically
+    when it sees files exist but none is currently being previewed.
+    """
     def find_first(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
         for i in range(item.childCount()):
             child = item.child(i)
@@ -105,7 +109,6 @@ def _auto_open_first_pdf(win: MainWindow) -> None:
         item = find_first(win.pdf_tree.topLevelItem(i))
         if item:
             item.setCheckState(0, Qt.Checked)
-            win.open_pdf_at_index(0)
             return
 
 
@@ -480,14 +483,10 @@ def refresh_selected_files_list(win: MainWindow) -> None:
             win.update_navigation_ui()
             return
 
-    # Previously viewed file was unchecked - jump to nearest remaining file
-    if old_index >= 0:
-        new_index = min(old_index, len(win.selected_pdf_paths) - 1)
-        win.open_pdf_at_index(new_index)
-    else:
-        win.current_file_index = -1
-        win.close_current_doc()
-        win.update_navigation_ui()
+    # Viewed file was unchecked, or no file was previewed (e.g. root folder
+    # unchecked then re-checked). Open the nearest available file in both cases.
+    new_index = min(old_index, len(win.selected_pdf_paths) - 1) if old_index >= 0 else 0
+    win.open_pdf_at_index(new_index)
 
 
 def _filter_tree(win: MainWindow, text: str) -> None:
