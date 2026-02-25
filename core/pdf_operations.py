@@ -299,7 +299,10 @@ class PDFOperations:
         High-level wrapper to calculate position, resolve font, and insert text.
         This allows both the UI (Preview) and the Worker Thread to use identical logic.
         """
-        # 1. Get Page Dimensions (Corrected for Rotation)
+        # 1. Wrap existing content in q/Q so its transforms don't affect our text.
+        page.wrap_contents()
+
+        # 2. Get Page Dimensions (Corrected for Rotation)
         page_w, page_h = get_page_dim_corrected(page)
 
         # 2. Resolve Font
