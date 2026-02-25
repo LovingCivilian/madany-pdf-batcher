@@ -1,12 +1,80 @@
 from __future__ import annotations
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Set, Tuple, Optional, Any
 from PIL import Image, ImageEnhance
 
 import io
 import fitz  # PyMuPDF
 
-# Add this import to calculate positions
 from core.anchor import compute_anchor_for_pdf
+from core.constants import detect_paper_key, PTS_PER_MM
+
+
+# ------------------------------------------------------------------
+# Module-level utilities (shared by preview and batch processing)
+# ------------------------------------------------------------------
+
+def get_page_dim_corrected(page: fitz.Page) -> Tuple[float, float]:
+    """Get page dimensions corrected for rotation, returned as (width, height)."""
+    rect = page.rect
+    if page.rotation in (90, 270):
+        return rect.height, rect.width
+    return rect.width, rect.height
+
+
+def resolve_config_for_page(page: fitz.Page, configs: dict, default: dict) -> dict:
+    """Return the per-paper-size config for a page, falling back to default."""
+    w, h = get_page_dim_corrected(page)
+    key = detect_paper_key(w, h)
+    if key is None:
+        mode = "portrait" if h >= w else "landscape"
+        key = ("Unknown", mode)
+    return configs.get(key, default)
+
+
+def parse_custom_pages(input_str: str, total_pages: int) -> Set[int]:
+    """Parse a custom page range string like '1-3, 5, 7-10'."""
+    pages: Set[int] = set()
+    for part in input_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            try:
+                start, end = map(int, part.split("-", 1))
+                if start > end:
+                    start, end = end, start
+                for p in range(start, end + 1):
+                    if 1 <= p <= total_pages:
+                        pages.add(p)
+            except ValueError:
+                continue
+        else:
+            try:
+                p = int(part)
+                if 1 <= p <= total_pages:
+                    pages.add(p)
+            except ValueError:
+                continue
+    return pages
+
+
+def check_page_selection(cfg: dict, idx_zero_based: int, total_pages: int) -> bool:
+    """Return True if the given page index is included in the config's page selection."""
+    pno = idx_zero_based + 1
+    mode = cfg.get("page_selection", "all")
+    if mode == "all":
+        return True
+    if mode == "first":
+        return pno == 1
+    if mode == "last":
+        return pno == total_pages
+    if mode == "odd":
+        return (pno % 2) == 1
+    if mode == "even":
+        return (pno % 2) == 0
+    if mode == "custom":
+        return pno in parse_custom_pages(cfg.get("custom_pages", ""), total_pages)
+    return False
 
 # Default constants
 DEFAULT_PAD_X = 3
@@ -235,11 +303,7 @@ class PDFOperations:
         page.clean_contents()
 
         # 1. Get Page Dimensions (Corrected for Rotation)
-        rect = page.rect
-        if page.rotation in (90, 270):
-            page_w, page_h = rect.height, rect.width
-        else:
-            page_w, page_h = rect.width, rect.height
+        page_w, page_h = get_page_dim_corrected(page)
 
         # 2. Resolve Font
         font_path = self.resolve_font_path(config, font_families)
@@ -284,6 +348,51 @@ class PDFOperations:
             pad_y=config.get("pad_y", 0), 
             line_gap=config.get("line_gap", 0)
         )
+
+    def apply_stamp_to_page(
+        self,
+        page: fitz.Page,
+        cfg: dict,
+        stamp_path: str,
+        prepared_stamp=None,
+    ) -> None:
+        """Insert a stamp onto a page using cfg for sizing and placement.
+
+        If prepared_stamp is provided its cached bytes are used (fast path for
+        batch processing). Otherwise the image is processed from stamp_path.
+        """
+        page_w, page_h = get_page_dim_corrected(page)
+
+        w_mm = cfg.get("stamp_width_mm", 50.0)
+        h_mm = cfg.get("stamp_height_mm", 50.0)
+        stamp_w_pts = w_mm * PTS_PER_MM
+        stamp_h_pts = h_mm * PTS_PER_MM
+        stamp_rotation = cfg.get("stamp_rotation", 0)
+        stamp_opacity = cfg.get("stamp_opacity", 100) / 100.0
+
+        if int(stamp_rotation) % 180 == 90:
+            visual_w, visual_h = stamp_h_pts, stamp_w_pts
+        else:
+            visual_w, visual_h = stamp_w_pts, stamp_h_pts
+
+        block_x, block_y = compute_anchor_for_pdf(page_w, page_h, visual_w, visual_h, cfg)
+
+        if prepared_stamp is not None:
+            self.insert_stamp_bytes(
+                page,
+                prepared_stamp.get_bytes(stamp_opacity),
+                block_x, block_y,
+                visual_w, visual_h,
+                stamp_rotation,
+            )
+        else:
+            self.insert_stamp(
+                page, stamp_path,
+                block_x, block_y,
+                visual_w, visual_h,
+                stamp_rotation,
+                stamp_opacity,
+            )
 
     # ------------------------------------------------------------------
     # Stamp Processing

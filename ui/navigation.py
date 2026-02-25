@@ -105,7 +105,8 @@ def update_navigation_ui(win: MainWindow) -> None:
 
 def update_page_info(win: MainWindow) -> None:
     """Update page info label and active features label."""
-    from ui.pdf_viewer import get_page_dim_corrected, is_page_in_selection
+    from core.pdf_operations import get_page_dim_corrected
+    from ui.pdf_viewer import is_page_in_selection
 
     if win.current_doc is None or win.current_page_count == 0:
         win.page_info_label.setText("Page Info")

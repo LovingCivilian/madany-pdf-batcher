@@ -18,10 +18,11 @@ from core.constants import (
     PROGRESS_DIALOG_WIDTH, PROGRESS_DIALOG_HEIGHT, CANCEL_BTN_WIDTH,
     STATUS_LABEL_MIN_HEIGHT, OVERWRITE_DIALOG_MIN_WIDTH, OVERWRITE_DIALOG_MIN_HEIGHT,
     MAX_ERRORS_DISPLAYED, THREAD_SLEEP_PER_FILE, THREAD_SLEEP_PER_PAGE,
-    PDF_SAVE_OPTIONS, PTS_PER_MM, detect_paper_key,
+    PDF_SAVE_OPTIONS,
 )
-from core.pdf_operations import PDFOperations, PreparedStamp
-from core.anchor import compute_anchor_for_pdf
+from core.pdf_operations import (
+    PDFOperations, PreparedStamp, resolve_config_for_page, check_page_selection,
+)
 from core.substitution_engine import SubstitutionEngine
 
 if TYPE_CHECKING:
@@ -109,25 +110,27 @@ class PDFProcessingThread(QThread):
 
                     # --- APPLY TEXT ---
                     if self.features["Text Insertion"]:
-                        cfg = self._get_config(page, self.text_settings["configs"], self.text_settings["default"])
-                        if self._check_selection(i, page_count, cfg):
+                        cfg = resolve_config_for_page(page, self.text_settings["configs"], self.text_settings["default"])
+                        if check_page_selection(cfg, i, page_count):
                             self.pdf_ops.apply_text_to_page(
                                 page, final_text_content, cfg, self.font_families
                             )
 
                     # --- APPLY TIMESTAMP ---
                     if self.features["Timestamp Insertion"]:
-                        cfg = self._get_config(page, self.timestamp_settings["configs"], self.timestamp_settings["default"])
-                        if self._check_selection(i, page_count, cfg):
+                        cfg = resolve_config_for_page(page, self.timestamp_settings["configs"], self.timestamp_settings["default"])
+                        if check_page_selection(cfg, i, page_count):
                             self.pdf_ops.apply_text_to_page(
                                 page, ts_full_str, cfg, self.font_families
                             )
 
                     # --- APPLY STAMP ---
                     if self.features["Stamp Insertion"] and prepared_stamp:
-                        cfg = self._get_config(page, self.stamp_settings["configs"], self.stamp_settings["default"])
-                        if self._check_selection(i, page_count, cfg):
-                            self._apply_stamp_logic(page, cfg, prepared_stamp)
+                        cfg = resolve_config_for_page(page, self.stamp_settings["configs"], self.stamp_settings["default"])
+                        if check_page_selection(cfg, i, page_count):
+                            self.pdf_ops.apply_stamp_to_page(
+                                page, cfg, self.stamp_settings["path"], prepared_stamp
+                            )
 
                 # Save Logic
                 if self.input_root:
@@ -161,81 +164,6 @@ class PDFProcessingThread(QThread):
                     doc.close()
 
         self.finished_processing.emit(self._is_canceled, success_count, error_count, errors)
-
-    # --- Thread Helpers ---
-    def _get_page_dim_corrected(self, page):
-        rect = page.rect
-        if page.rotation in (90, 270):
-            return rect.height, rect.width
-        return rect.width, rect.height
-
-    def _get_config(self, page, configs, default):
-        w, h = self._get_page_dim_corrected(page)
-        key = detect_paper_key(w, h)
-        if key is None:
-            mode = "portrait" if h >= w else "landscape"
-            key = ("Unknown", mode)
-        return configs.get(key, default)
-
-    def _check_selection(self, idx, total, cfg):
-        mode = cfg.get("page_selection", "all")
-        custom_str = cfg.get("custom_pages", "")
-        pno = idx + 1
-        if mode == "all":
-            return True
-        if mode == "first":
-            return pno == 1
-        if mode == "last":
-            return pno == total
-        if mode == "odd":
-            return (pno % 2) == 1
-        if mode == "even":
-            return (pno % 2) == 0
-        if mode == "custom":
-            pages = set()
-            for part in custom_str.split(","):
-                part = part.strip()
-                if "-" in part:
-                    try:
-                        s, e = map(int, part.split("-", 1))
-                        if s > e:
-                            s, e = e, s
-                        pages.update(range(s, e + 1))
-                    except Exception:
-                        continue
-                else:
-                    try:
-                        pages.add(int(part))
-                    except Exception:
-                        continue
-            return pno in pages
-        return False
-
-    def _apply_stamp_logic(self, page, cfg, prepared_stamp):
-        page_w, page_h = self._get_page_dim_corrected(page)
-        w_mm = cfg.get("stamp_width_mm", 50.0)
-        h_mm = cfg.get("stamp_height_mm", 50.0)
-        stamp_w_pts = w_mm * PTS_PER_MM
-        stamp_h_pts = h_mm * PTS_PER_MM
-        stamp_rotation = cfg.get("stamp_rotation", 0)
-        stamp_opacity = cfg.get("stamp_opacity", 100) / 100.0
-
-        if int(stamp_rotation) % 180 == 90:
-            visual_w, visual_h = stamp_h_pts, stamp_w_pts
-        else:
-            visual_w, visual_h = stamp_w_pts, stamp_h_pts
-
-        block_x, block_y = compute_anchor_for_pdf(
-            page_w, page_h, visual_w, visual_h, cfg
-        )
-
-        self.pdf_ops.insert_stamp_bytes(
-            page,
-            prepared_stamp.get_bytes(stamp_opacity),
-            block_x, block_y,
-            visual_w, visual_h,
-            stamp_rotation,
-        )
 
 
 # =====================================================================

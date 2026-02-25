@@ -3,15 +3,17 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 import fitz
 
-from core.constants import (
-    PTS_PER_MM, DEFAULT_PAPER_KEY, PREVIEW_ZOOM_BASE, detect_paper_key,
+from core.constants import DEFAULT_PAPER_KEY, PREVIEW_ZOOM_BASE
+from core.pdf_operations import (
+    PreparedStamp,
+    get_page_dim_corrected,
+    resolve_config_for_page,
+    check_page_selection,
 )
-from core.anchor import compute_anchor_for_pdf
-from core.pdf_operations import PreparedStamp
 
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
@@ -70,15 +72,6 @@ def open_pdf_at_index(win: MainWindow, index: int) -> None:
     sync_tree_selection(win, path)
     win.update_navigation_ui()
     win.render_current_page()
-
-
-def get_page_dim_corrected(page: fitz.Page) -> Tuple[float, float]:
-    """Get page dimensions corrected for rotation."""
-    rect = page.rect
-    w, h = rect.width, rect.height
-    if page.rotation in (90, 270):
-        return h, w
-    return w, h
 
 
 def render_current_page(win: MainWindow) -> None:
@@ -169,68 +162,18 @@ def _apply_stamp_to_page(
     """Insert a stamp image onto a PDF page."""
     if not win.current_stamp_path or not os.path.exists(win.current_stamp_path):
         return
-
-    page_w, page_h = get_page_dim_corrected(page)
-
-    w_mm = cfg.get("stamp_width_mm", 50.0)
-    h_mm = cfg.get("stamp_height_mm", 50.0)
-    stamp_w_pts = w_mm * PTS_PER_MM
-    stamp_h_pts = h_mm * PTS_PER_MM
-    stamp_rotation = cfg.get("stamp_rotation", 0)
-    stamp_opacity = cfg.get("stamp_opacity", 100) / 100.0
-
-    if int(stamp_rotation) % 180 == 90:
-        visual_w, visual_h = stamp_h_pts, stamp_w_pts
-    else:
-        visual_w, visual_h = stamp_w_pts, stamp_h_pts
-
-    block_x, block_y = compute_anchor_for_pdf(
-        page_w, page_h, visual_w, visual_h, cfg
-    )
-
-    if prepared_stamp:
-        win.pdf_ops.insert_stamp_bytes(
-            page,
-            prepared_stamp.get_bytes(stamp_opacity),
-            block_x, block_y,
-            visual_w, visual_h,
-            stamp_rotation,
-        )
-    else:
-        win.pdf_ops.insert_stamp(
-            page, win.current_stamp_path,
-            block_x, block_y,
-            visual_w, visual_h,
-            stamp_rotation,
-            stamp_opacity,
-        )
+    win.pdf_ops.apply_stamp_to_page(page, cfg, win.current_stamp_path, prepared_stamp)
 
 
 def get_config_for_page_size(win: MainWindow, page: fitz.Page, config_type: str) -> Dict:
     """Look up the per-paper-size config for a given page, with fallback."""
-    w, h = get_page_dim_corrected(page)
-    key = detect_paper_key(w, h)
-
-    if key is None:
-        mode = "portrait" if h >= w else "landscape"
-        key = ("Unknown", mode)
-
-    if config_type == "text":
-        target_map = win.text_configs_by_size
-        default = win.default_text_config
-    elif config_type == "timestamp":
-        target_map = win.timestamp_configs_by_size
-        default = win.default_timestamp_config
+    if config_type == "timestamp":
+        configs, default = win.timestamp_configs_by_size, win.default_timestamp_config
     elif config_type == "stamp":
-        target_map = win.stamp_configs_by_size
-        default = win.default_stamp_config
+        configs, default = win.stamp_configs_by_size, win.default_stamp_config
     else:
-        target_map = win.text_configs_by_size
-        default = win.default_text_config
-
-    if key and key in target_map:
-        return target_map[key]
-    return default
+        configs, default = win.text_configs_by_size, win.default_text_config
+    return resolve_config_for_page(page, configs, default)
 
 
 def is_pdf_standard_size(path: str) -> bool:
@@ -252,68 +195,17 @@ def is_page_in_selection(
     page=None,
 ) -> bool:
     """Check if a given page index is included in the feature's page selection."""
-    pno = idx_zero_based + 1
-    mode = "all"
-    custom_str = ""
-
     if page is not None:
         cfg = get_config_for_page_size(win, page, feature)
-        mode = cfg.get("page_selection", "all")
-        custom_str = cfg.get("custom_pages", "")
     else:
         key = DEFAULT_PAPER_KEY
-        if feature == "text":
-            cfg = win.text_configs_by_size.get(key, win.default_text_config)
-        elif feature == "timestamp":
+        if feature == "timestamp":
             cfg = win.timestamp_configs_by_size.get(key, win.default_timestamp_config)
         elif feature == "stamp":
             cfg = win.stamp_configs_by_size.get(key, win.default_stamp_config)
         else:
-            cfg = {}
-        mode = cfg.get("page_selection", "all")
-        custom_str = cfg.get("custom_pages", "")
-
-    if mode == "all":
-        return True
-    if mode == "first":
-        return pno == 1
-    if mode == "last":
-        return pno == total_pages
-    if mode == "odd":
-        return (pno % 2) == 1
-    if mode == "even":
-        return (pno % 2) == 0
-    if mode == "custom":
-        return pno in parse_custom_pages(custom_str, total_pages)
-
-    return False
-
-
-def parse_custom_pages(input_str: str, total_pages: int) -> Set[int]:
-    """Parse a custom page range string like '1-3, 5, 7-10'."""
-    pages: Set[int] = set()
-    for part in input_str.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            try:
-                start, end = map(int, part.split("-", 1))
-                if start > end:
-                    start, end = end, start
-                for p in range(start, end + 1):
-                    if 1 <= p <= total_pages:
-                        pages.add(p)
-            except ValueError:
-                continue
-        else:
-            try:
-                p = int(part)
-                if 1 <= p <= total_pages:
-                    pages.add(p)
-            except ValueError:
-                continue
-    return pages
+            cfg = win.text_configs_by_size.get(key, win.default_text_config)
+    return check_page_selection(cfg, idx_zero_based, total_pages)
 
 
 def build_timestamp_string(win: MainWindow, fmt: str) -> str:
