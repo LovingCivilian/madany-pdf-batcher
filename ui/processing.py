@@ -135,6 +135,7 @@ class PDFProcessingThread(QThread):
                     os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 else:
                     save_path = os.path.join(self.output_dir, filename)
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
                 save_args = dict(PDF_SAVE_OPTIONS)
 
@@ -388,8 +389,7 @@ def process_all_pdfs(win: MainWindow) -> None:
         show_warning(win, "No Output", "Please select an output folder.")
         return
     if not os.path.isdir(out_dir):
-        show_error(win, "Invalid Output", "The output folder does not exist.")
-        return
+        os.makedirs(out_dir, exist_ok=True)
 
     # Check for existing files that would be overwritten
     existing_files = get_existing_output_files(win, out_dir)
