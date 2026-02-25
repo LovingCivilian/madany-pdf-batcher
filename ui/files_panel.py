@@ -85,6 +85,28 @@ def pick_input_folder(win: MainWindow) -> None:
         win.current_file_index = -1
         win.close_current_doc()
         win.update_navigation_ui()
+        _auto_open_first_pdf(win)
+
+
+def _auto_open_first_pdf(win: MainWindow) -> None:
+    """Check the first available PDF in the tree and open it for preview."""
+    def find_first(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
+        for i in range(item.childCount()):
+            child = item.child(i)
+            path = getattr(child, "full_path", "")
+            if path.lower().endswith(".pdf") and (child.flags() & Qt.ItemIsEnabled):
+                return child
+            result = find_first(child)
+            if result:
+                return result
+        return None
+
+    for i in range(win.pdf_tree.topLevelItemCount()):
+        item = find_first(win.pdf_tree.topLevelItem(i))
+        if item:
+            item.setCheckState(0, Qt.Checked)
+            win.open_pdf_at_index(0)
+            return
 
 
 def pick_output_folder(win: MainWindow) -> None:
@@ -458,10 +480,14 @@ def refresh_selected_files_list(win: MainWindow) -> None:
             win.update_navigation_ui()
             return
 
-    # Previously viewed file was unchecked — close preview instead of auto-jumping
-    win.current_file_index = -1
-    win.close_current_doc()
-    win.update_navigation_ui()
+    # Previously viewed file was unchecked - jump to nearest remaining file
+    if old_index >= 0:
+        new_index = min(old_index, len(win.selected_pdf_paths) - 1)
+        win.open_pdf_at_index(new_index)
+    else:
+        win.current_file_index = -1
+        win.close_current_doc()
+        win.update_navigation_ui()
 
 
 def _filter_tree(win: MainWindow, text: str) -> None:
