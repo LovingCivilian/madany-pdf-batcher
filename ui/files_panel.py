@@ -85,31 +85,7 @@ def pick_input_folder(win: MainWindow) -> None:
         win.current_file_index = -1
         win.close_current_doc()
         win.update_navigation_ui()
-        _auto_open_first_pdf(win)
-
-
-def _auto_open_first_pdf(win: MainWindow) -> None:
-    """Check the first available PDF in the tree.
-
-    refresh_selected_files_list handles opening the preview automatically
-    when it sees files exist but none is currently being previewed.
-    """
-    def find_first(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
-        for i in range(item.childCount()):
-            child = item.child(i)
-            path = getattr(child, "full_path", "")
-            if path.lower().endswith(".pdf") and (child.flags() & Qt.ItemIsEnabled):
-                return child
-            result = find_first(child)
-            if result:
-                return result
-        return None
-
-    for i in range(win.pdf_tree.topLevelItemCount()):
-        item = find_first(win.pdf_tree.topLevelItem(i))
-        if item:
-            item.setCheckState(0, Qt.Checked)
-            return
+        _set_all_check_state(win, Qt.Checked)
 
 
 def pick_output_folder(win: MainWindow) -> None:
