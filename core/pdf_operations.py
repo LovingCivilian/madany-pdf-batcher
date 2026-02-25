@@ -299,9 +299,6 @@ class PDFOperations:
         High-level wrapper to calculate position, resolve font, and insert text.
         This allows both the UI (Preview) and the Worker Thread to use identical logic.
         """
-        # 0. Normalize the content stream so existing transforms don't affect our text
-        page.clean_contents()
-
         # 1. Get Page Dimensions (Corrected for Rotation)
         page_w, page_h = get_page_dim_corrected(page)
 
@@ -488,9 +485,6 @@ class PDFOperations:
             return (0.0, 0.0)
 
         try:
-            # Normalize the content stream so existing transforms don't affect our stamp
-            page.clean_contents()
-
             target_rect = fitz.Rect(
                 x_origin, y_origin,
                 x_origin + width, y_origin + height
