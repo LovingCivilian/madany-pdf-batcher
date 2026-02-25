@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Madany's PDF Batcher 1.2.0 - a PySide6 desktop application for batch processing PDFs. Features include text insertion, timestamps, image stamps/watermarks, and PDF security (AES-256 encryption).
+Madany's PDF Batcher 1.2.1 - a PySide6 desktop application for batch processing PDFs. Features include text insertion, timestamps, image stamps/watermarks, and PDF security (AES-256 encryption).
 
 ## Running
 

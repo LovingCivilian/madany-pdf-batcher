@@ -10,7 +10,7 @@ DEBOUNCE_DELAY_MS = 150
 # APPLICATION CONSTANTS
 # ============================================================
 
-APP_TITLE = "Madany's PDF Batcher 1.2.0"
+APP_TITLE = "Madany's PDF Batcher 1.2.1"
 WINDOW_WIDTH = 1500
 WINDOW_HEIGHT = 900
 PROGRESS_DIALOG_WIDTH = 400
