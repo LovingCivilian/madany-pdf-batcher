@@ -92,6 +92,7 @@ class PDFProcessingThread(QThread):
 
             time.sleep(THREAD_SLEEP_PER_FILE)
 
+            doc = None
             try:
                 doc = fitz.open(pdf_path)
                 page_count = len(doc)
@@ -147,7 +148,6 @@ class PDFProcessingThread(QThread):
                     })
 
                 doc.save(save_path, **save_args)
-                doc.close()
                 success_count += 1
 
             except Exception as e:
@@ -155,6 +155,10 @@ class PDFProcessingThread(QThread):
                 self.log_message.emit(msg)
                 errors.append(msg)
                 error_count += 1
+
+            finally:
+                if doc:
+                    doc.close()
 
         self.finished_processing.emit(self._is_canceled, success_count, error_count, errors)
 

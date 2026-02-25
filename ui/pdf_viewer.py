@@ -132,22 +132,24 @@ def render_current_page(win: MainWindow) -> None:
 
         if should_draw_text or should_draw_ts or should_draw_stamp:
             doc_copy = fitz.open(stream=win.current_doc.tobytes(), filetype="pdf")
-            temp_page = doc_copy.load_page(win.current_page_index)
+            try:
+                temp_page = doc_copy.load_page(win.current_page_index)
 
-            if should_draw_text:
-                cfg = get_config_for_page_size(win, temp_page, "text")
-                win.pdf_ops.apply_text_to_page(temp_page, final_text_content, cfg, win.font_families)
+                if should_draw_text:
+                    cfg = get_config_for_page_size(win, temp_page, "text")
+                    win.pdf_ops.apply_text_to_page(temp_page, final_text_content, cfg, win.font_families)
 
-            if should_draw_ts:
-                cfg = get_config_for_page_size(win, temp_page, "timestamp")
-                win.pdf_ops.apply_text_to_page(temp_page, timestamp_str, cfg, win.font_families)
+                if should_draw_ts:
+                    cfg = get_config_for_page_size(win, temp_page, "timestamp")
+                    win.pdf_ops.apply_text_to_page(temp_page, timestamp_str, cfg, win.font_families)
 
-            if should_draw_stamp:
-                cfg = get_config_for_page_size(win, temp_page, "stamp")
-                _apply_stamp_to_page(win, temp_page, cfg)
+                if should_draw_stamp:
+                    cfg = get_config_for_page_size(win, temp_page, "stamp")
+                    _apply_stamp_to_page(win, temp_page, cfg)
 
-            win.preview_widget.set_page(temp_page, zoom=PREVIEW_ZOOM_BASE)
-            doc_copy.close()
+                win.preview_widget.set_page(temp_page, zoom=PREVIEW_ZOOM_BASE)
+            finally:
+                doc_copy.close()
         else:
             win.preview_widget.set_page(page, zoom=PREVIEW_ZOOM_BASE)
 

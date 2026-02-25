@@ -56,10 +56,12 @@ class StampConfigurationDialog(BaseConfigurationDialog):
                     # Create a temp file (closed so other processes/libraries can open it)
                     tf = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                     tf.close()
-                    
+
                     if scaled_img.save(tf.name):
                         self.preview_stamp_path = tf.name
                         self._temp_preview_file = tf.name
+                    else:
+                        os.unlink(tf.name)
 
         # --- RATIO CALCULATION ---
         # vital: Calculate ratio based on the ORIGINAL active stamp (High Res), 
@@ -401,7 +403,7 @@ class StampConfigurationDialog(BaseConfigurationDialog):
                     config.get("stamp_opacity", 100) / 100.0
                 )
                 stamp_drawn = True
-            except:
+            except Exception:
                 pass
 
         if not stamp_drawn:
